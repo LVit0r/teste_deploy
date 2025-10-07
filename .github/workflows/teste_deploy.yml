@@ -40,12 +40,24 @@ jobs:
       # 4️⃣ Gerar e subir nova tag automaticamente
       #    Se o commit tiver "#patch" ou "#major", ele respeita.
       #    Caso contrário, faz o bump padrão "minor".
+      - name: Detect bump type
+        id: bump
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          if [[ "$COMMIT_MSG" == *"#major"* ]]; then
+            echo "bump=major" >> $GITHUB_OUTPUT
+          elif [[ "$COMMIT_MSG" == *"#patch"* ]]; then
+            echo "bump=patch" >> $GITHUB_OUTPUT
+          else
+            echo "bump=minor" >> $GITHUB_OUTPUT
+          fi
+
       - name: Bump version and push new tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: minor   # 👈 padrão definido como minor
+          default_bump: ${{ steps.bump.outputs.bump }}
           tag_prefix: v
 
       # 5️⃣ Logar no Docker Hub
