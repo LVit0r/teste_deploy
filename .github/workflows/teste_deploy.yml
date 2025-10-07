@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+      - HML
+      - DEV
 
 env:
   PYTHON_VERSION: '3.11'
@@ -23,7 +25,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # precisa puxar todas as tags para funcionar corretamente
+          fetch-depth: 0  # precisa puxar todas as tags para o versionamento
 
       # 2️⃣ Configurar Python
       - name: Set up Python
@@ -37,37 +39,51 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4️⃣ Gerar e subir nova tag automaticamente
-      #    Se o commit tiver "#patch" ou "#major", ele respeita.
-      #    Caso contrário, faz o bump padrão "minor".
+      # 4️⃣ Detectar tipo de bump com base na mensagem do commit
       - name: Detect bump type
         id: bump
         run: |
           COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "Último commit: $COMMIT_MSG"
+
           if [[ "$COMMIT_MSG" == *"#major"* ]]; then
-            echo "bump=major" >> $GITHUB_OUTPUT
+            echo "BUMP=major" >> $GITHUB_ENV
           elif [[ "$COMMIT_MSG" == *"#patch"* ]]; then
-            echo "bump=patch" >> $GITHUB_OUTPUT
+            echo "BUMP=patch" >> $GITHUB_ENV
           else
-            echo "bump=minor" >> $GITHUB_OUTPUT
+            echo "BUMP=minor" >> $GITHUB_ENV
           fi
 
+      # 5️⃣ Gerar tag apenas se for branch main
       - name: Bump version and push new tag
         id: tag_version
+        if: github.ref == 'refs/heads/main'
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: ${{ steps.bump.outputs.bump }}
+          default_bump: ${{ env.BUMP }}
           tag_prefix: v
 
-      # 5️⃣ Logar no Docker Hub
+      # 6️⃣ Logar no Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      # 6️⃣ Build e push da imagem Docker com as tags geradas
+      # 7️⃣ Definir TAG da imagem de acordo com a branch
+      - name: Set image tag
+        id: set_tag
+        run: |
+          if [[ "${GITHUB_REF##*/}" == "main" ]]; then
+            echo "TAG=${{ steps.tag_version.outputs.new_tag }}" >> $GITHUB_ENV
+          elif [[ "${GITHUB_REF##*/}" == "HML" ]]; then
+            echo "TAG=hml-${GITHUB_RUN_ID}" >> $GITHUB_ENV
+          else
+            echo "TAG=dev-${GITHUB_RUN_ID}" >> $GITHUB_ENV
+          fi
+
+      # 8️⃣ Build e push da imagem Docker
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
@@ -75,6 +91,5 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ env.DOCKER_IMAGE }}:latest
-            ${{ env.DOCKER_IMAGE }}:${{ steps.tag_version.outputs.new_tag }}
-            
+            ${{ env.DOCKER_IMAGE }}:${{ env.TAG }}
+            ${{ env.DOCKER_IMAGE }}:${{ github.ref_name }}
