@@ -1,4 +1,4 @@
-name: CI Multi-Branch Django
+name: CI TESTE DEPLOY DJANGO
 
 on:
   push:
@@ -17,15 +17,16 @@ permissions:
 
 jobs:
 
-  # job DEV 
-  build-dev:
-    if: github.ref == 'refs/heads/DEV'
+  build-base:
     runs-on: ubuntu-latest
-    environment: TESTE DEPLOY
-    name: Build e Push DEV
+    name: Preparar ambiente base
+    outputs:
+      branch: ${{ steps.get_branch.outputs.branch }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -36,6 +37,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Get current branch
+        id: get_branch
+        run: |
+          echo "branch=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
+
+  build-dev:
+    needs: build-base
+    if: needs.build-base.outputs.branch == 'DEV'
+    runs-on: ubuntu-latest
+    environment: TESTE DEPLOY
+    name: Build e Push DEV
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -52,9 +68,10 @@ jobs:
           tags: |
             ${{ env.DOCKER_IMAGE }}:dev-${{ github.run_id }}
             ${{ env.DOCKER_IMAGE }}:dev
-  # job HML 
+
   build-hml:
-    if: github.ref == 'refs/heads/HML'
+    needs: build-base
+    if: needs.build-base.outputs.branch == 'HML'
     runs-on: ubuntu-latest
     environment: TESTE DEPLOY
     name: Build e Push HML
@@ -62,15 +79,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -87,28 +95,18 @@ jobs:
           tags: |
             ${{ env.DOCKER_IMAGE }}:hml-${{ github.run_id }}
             ${{ env.DOCKER_IMAGE }}:hml
-  # job main, simulando (PROD)
+
   build-prod:
-    if: github.ref == 'refs/heads/main'
+    needs: build-base
+    if: needs.build-base.outputs.branch == 'main'
     runs-on: ubuntu-latest
     environment: TESTE DEPLOY
     name: Build e Push Produção
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # necessário para gerar tags
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
+        
       - name: Detect bump type
         id: bump
         run: |
