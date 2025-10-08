@@ -1,4 +1,4 @@
-name: CI teste-deploy-django
+name: CI Multi-Branch Django
 
 on:
   push:
@@ -9,37 +9,106 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_REPO }}  # Ex: usuario/repositorio
+  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_REPO }}
+
+permissions:
+  contents: write
+  packages: write
 
 jobs:
-  ci-and-publish:
+
+  # job DEV 
+  build-dev:
+    if: github.ref == 'refs/heads/DEV'
     runs-on: ubuntu-latest
     environment: TESTE DEPLOY
-
-    permissions:
-      contents: write
-      packages: write
-
+    name: Build e Push DEV
     steps:
-      # 1️⃣ Checkout
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # 2️⃣ Set up Python
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      # 3️⃣ Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4️⃣ Detectar tipo de bump baseado no commit
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Build and Push DEV image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:dev-${{ github.run_id }}
+            ${{ env.DOCKER_IMAGE }}:dev
+  # job HML 
+  build-hml:
+    if: github.ref == 'refs/heads/HML'
+    runs-on: ubuntu-latest
+    environment: TESTE DEPLOY
+    name: Build e Push HML
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Build and Push HML image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:hml-${{ github.run_id }}
+            ${{ env.DOCKER_IMAGE }}:hml
+  # job main, simulando (PROD)
+  build-prod:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: TESTE DEPLOY
+    name: Build e Push Produção
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # necessário para gerar tags
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
       - name: Detect bump type
         id: bump
         run: |
@@ -54,46 +123,26 @@ jobs:
             echo "BUMP=minor" >> $GITHUB_ENV
           fi
 
-      # 5️⃣ Gerar tag apenas na main
-      - name: Bump version and push new tag
+      - name: Bump version and create tag
         id: tag_version
-        if: github.ref == 'refs/heads/main'
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: ${{ env.BUMP }}
           tag_prefix: v
 
-      # 6️⃣ Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-      # 7️⃣ Definir TAG da imagem
-      - name: Set image tag
-        id: set_tag
-        run: |
-          BRANCH=${GITHUB_REF##*/}
-          if [[ "$BRANCH" == "main" ]]; then
-            echo "TAG1=${{ steps.tag_version.outputs.new_tag }}" >> $GITHUB_ENV
-            echo "TAG2=latest" >> $GITHUB_ENV
-          elif [[ "$BRANCH" == "HML" ]]; then
-            echo "TAG1=hml-${GITHUB_RUN_ID}" >> $GITHUB_ENV
-            echo "TAG2=hml" >> $GITHUB_ENV
-          else
-            echo "TAG1=dev-${GITHUB_RUN_ID}" >> $GITHUB_ENV
-            echo "TAG2=dev" >> $GITHUB_ENV
-          fi
-
-      # 8️⃣ Build e push das imagens com múltiplas tags
-      - name: Build and push Docker image
+      - name: Build and Push Prod image
         uses: docker/build-push-action@v4
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ env.DOCKER_IMAGE }}:${{ env.TAG1 }}
-            ${{ env.DOCKER_IMAGE }}:${{ env.TAG2 }}
+            ${{ env.DOCKER_IMAGE }}:${{ steps.tag_version.outputs.new_tag }}
+            ${{ env.DOCKER_IMAGE }}:latest
