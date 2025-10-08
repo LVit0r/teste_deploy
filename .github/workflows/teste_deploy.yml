@@ -50,6 +50,9 @@ jobs:
     environment: TESTE DEPLOY
     name: Build e Push DEV
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
@@ -73,6 +76,10 @@ jobs:
     environment: TESTE DEPLOY
     name: Build e Push HML
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
@@ -96,6 +103,10 @@ jobs:
     environment: TESTE DEPLOY
     name: Build e Push Produção
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+        
       - name: Detect bump type
         id: bump
         run: |
