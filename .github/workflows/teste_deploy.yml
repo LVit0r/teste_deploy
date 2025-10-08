@@ -21,6 +21,7 @@ jobs:
   build-dev:
     if: github.ref == 'refs/heads/DEV'
     runs-on: ubuntu-latest
+    enviroment: TESTE DEPLOY
     name: Build e Push DEV
     steps:
       - name: Checkout
@@ -55,6 +56,7 @@ jobs:
   build-hml:
     if: github.ref == 'refs/heads/HML'
     runs-on: ubuntu-latest
+    enviroment: TESTE DEPLOY
     name: Build e Push HML
     steps:
       - name: Checkout
@@ -89,6 +91,7 @@ jobs:
   build-prod:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    enviroment: TESTE DEPLOY
     name: Build e Push Produção
     steps:
       - name: Checkout
